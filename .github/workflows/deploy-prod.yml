@@ -20,7 +20,7 @@ jobs:
 
       - name: Authenticate Production Org
         run: |
-          echo "${{ secrets.SF_AUTH_PROD }}" > auth.txt
+          echo "${{ secrets.SC360_PROD_AUTH_URL }}" > auth.txt
           sf org login sfdx-url \
             --sfdx-url-file auth.txt \
             --alias PROD
