@@ -1,7 +1,9 @@
-name: Deploy to DEV
+name: Salesforce DEV Deployment
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - develop
 
 jobs:
   deploy:
@@ -13,17 +15,27 @@ jobs:
 
       - name: Install Salesforce CLI
         run: |
-          npm install --global @salesforce/cli
+          npm install @salesforce/cli --global
           sf --version
 
-      - name: Authenticate to DEV Org
+      - name: Authenticate DEV Org
         run: |
-          echo "${{ secrets.DEV_SFDX_AUTH_URL }}" > auth.txt
-          sf org login sfdx-url --sfdx-url-file auth.txt --alias DEV
+          echo "${{ secrets.SC360_DEV_AUTH_URL }}" > auth.txt
+          sf org login sfdx-url \
+            --sfdx-url-file auth.txt \
+            --alias DEV
+
+      - name: Validate Deployment
+        run: |
+          sf project deploy validate \
+            --target-org DEV \
+            --source-dir force-app \
+            --test-level RunLocalTests \
+            --wait 60
 
       - name: Deploy Metadata
         run: |
           sf project deploy start \
             --target-org DEV \
             --source-dir force-app \
-            --wait 30
+            --wait 60
