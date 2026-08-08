@@ -20,20 +20,22 @@ jobs:
 
       - name: Authenticate UAT Org
         run: |
-          echo "${{ secrets.SF_AUTH_UAT }}" > auth.txt
+          echo "${{ secrets.SC360_UAT_AUTH_URL }}" > auth.txt
           sf org login sfdx-url \
             --sfdx-url-file auth.txt \
             --alias UAT
+
+      - name: Validate Deployment
+        run: |
+          sf project deploy validate \
+            --target-org UAT \
+            --source-dir force-app \
+            --test-level RunLocalTests \
+            --wait 60
 
       - name: Deploy Metadata
         run: |
           sf project deploy start \
             --target-org UAT \
-            --source-dir force-app
-
-      - name: Run Apex Tests
-        run: |
-          sf apex run test \
-            --target-org UAT \
-            --test-level RunLocalTests \
+            --source-dir force-app \
             --wait 60
