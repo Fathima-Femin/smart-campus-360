@@ -1,40 +1,29 @@
-name: Salesforce Production Deployment
+steps:
+  - name: Checkout Repository
+    uses: actions/checkout@v4
 
-on:
-  push:
-    branches:
-      - main
+  - name: Install Salesforce CLI
+    run: |
+      npm install @salesforce/cli --global
+      sf --version
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+  # 👇 Add this temporary step
+  - name: Check Secret
+    run: |
+      echo "${{ secrets.SC360_PROD_AUTH_URL }}" > auth.txt
+      cat auth.txt | head -c 25
 
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+  - name: Authenticate Production Org
+    run: |
+      echo "${{ secrets.SC360_PROD_AUTH_URL }}" > auth.txt
+      sf org login sfdx-url \
+        --sfdx-url-file auth.txt \
+        --alias PROD
 
-      - name: Install Salesforce CLI
-        run: |
-          npm install @salesforce/cli --global
-          sf --version
-
-      - name: Authenticate Production Org
-        run: |
-          echo "${{ secrets.SC360_PROD_AUTH_URL }}" > auth.txt
-          sf org login sfdx-url \
-            --sfdx-url-file auth.txt \
-            --alias PROD
-
-      - name: Validate Deployment
-        run: |
-          sf project deploy validate \
-            --target-org PROD \
-            --source-dir force-app \
-            --test-level RunLocalTests \
-            --wait 60
-
-      - name: Deploy Metadata
-        run: |
-          sf project deploy start \
-            --target-org PROD \
-            --source-dir force-app
+  - name: Validate Deployment
+    run: |
+      sf project deploy validate \
+        --target-org PROD \
+        --source-dir force-app \
+        --test-level RunLocalTests \
+        --wait 60
