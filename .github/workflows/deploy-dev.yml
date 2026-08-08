@@ -1,0 +1,29 @@
+name: Deploy to DEV
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Salesforce CLI
+        run: |
+          npm install --global @salesforce/cli
+          sf --version
+
+      - name: Authenticate to DEV Org
+        run: |
+          echo "${{ secrets.DEV_SFDX_AUTH_URL }}" > auth.txt
+          sf org login sfdx-url --sfdx-url-file auth.txt --alias DEV
+
+      - name: Deploy Metadata
+        run: |
+          sf project deploy start \
+            --target-org DEV \
+            --source-dir force-app \
+            --wait 30
