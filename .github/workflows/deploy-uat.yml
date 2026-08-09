@@ -1,0 +1,41 @@
+name: Salesforce UAT Deployment
+
+on:
+  push:
+    branches:
+      - uat
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Salesforce CLI
+        run: |
+          npm install @salesforce/cli --global
+          sf --version
+
+      - name: Authenticate UAT Org
+        run: |
+          echo "${{ secrets.SC360_UAT_AUTH_URL }}" > auth.txt
+          sf org login sfdx-url \
+            --sfdx-url-file auth.txt \
+            --alias UAT
+
+      - name: Validate Deployment
+        run: |
+          sf project deploy validate \
+            --target-org UAT \
+            --source-dir force-app \
+            --test-level RunLocalTests \
+            --wait 60
+
+      - name: Deploy Metadata
+        run: |
+          sf project deploy start \
+            --target-org UAT \
+            --source-dir force-app \
+            --wait 60
