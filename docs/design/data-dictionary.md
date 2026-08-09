@@ -25,7 +25,7 @@
 | Course__c | Lookup | Yes | Course |
 | Application_Date__c | Date | Yes | Application date |
 | Status__c | Picklist | Yes | Application status |
-
+Status = Draft, Submitted, Approved, Rejected
 ---
 
 ## Course__c
