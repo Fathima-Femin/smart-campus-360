@@ -10,32 +10,160 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+      # 1. Checkout the repository
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
+      # 2. Install Salesforce CLI
       - name: Install Salesforce CLI
         run: |
           npm install @salesforce/cli --global
           sf --version
 
+      # 3. Authenticate to UAT
       - name: Authenticate UAT Org
         run: |
           echo "${{ secrets.SC360_UAT_AUTH_URL }}" > auth.txt
+
           sf org login sfdx-url \
             --sfdx-url-file auth.txt \
             --alias UAT
 
-      - name: Validate Deployment
-        run: |
-          sf project deploy validate \
-            --target-org UAT \
-            --source-dir force-app \
-            --test-level RunLocalTests \
-            --wait 60
+          rm auth.txt
 
-      - name: Deploy Metadata
+      # 4. Identify only the Salesforce metadata changed by this push
+      - name: Get Changed Metadata
+        id: changed
+        shell: bash
         run: |
+
+          echo "Previous commit:"
+          echo "${{ github.event.before }}"
+
+          echo "Current commit:"
+          echo "${{ github.sha }}"
+
+          echo "----------------------------------------"
+          echo "Changed files:"
+          echo "----------------------------------------"
+
+          git diff --name-status \
+            "${{ github.event.before }}" \
+            "${{ github.sha }}" \
+            -- force-app
+
+          echo "----------------------------------------"
+
+          # Get only Added, Copied, Modified and Renamed files.
+          # Deleted files are intentionally excluded because a deleted
+          # source file cannot be passed to --source-dir.
+          mapfile -t CHANGED_FILES < <(
+            git diff --name-only \
+              --diff-filter=ACMR \
+              "${{ github.event.before }}" \
+              "${{ github.sha }}" \
+              -- force-app
+          )
+
+          if [ ${#CHANGED_FILES[@]} -eq 0 ]; then
+            echo "No Salesforce metadata changes detected."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Salesforce metadata to deploy:"
+          printf '%s\n' "${CHANGED_FILES[@]}"
+
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+          # Store each file as a separate output line.
+          {
+            echo "files<<EOF"
+            printf '%s\n' "${CHANGED_FILES[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # 5. Preview exactly what will be deployed
+      - name: Preview Deployment
+        if: steps.changed.outputs.has_changes == 'true'
+        shell: bash
+        env:
+          CHANGED_FILES: ${{ steps.changed.outputs.files }}
+        run: |
+
+          echo "========================================"
+          echo "Deployment Preview"
+          echo "========================================"
+
+          mapfile -t FILES <<< "$CHANGED_FILES"
+
+          DEPLOY_ARGS=()
+
+          for FILE in "${FILES[@]}"; do
+            if [ -n "$FILE" ]; then
+              DEPLOY_ARGS+=(--source-dir "$FILE")
+            fi
+          done
+
+          sf project deploy preview \
+            --target-org UAT \
+            "${DEPLOY_ARGS[@]}"
+
+      # 6. Validate the changed metadata only
+      - name: Validate Changed Metadata
+        if: steps.changed.outputs.has_changes == 'true'
+        shell: bash
+        env:
+          CHANGED_FILES: ${{ steps.changed.outputs.files }}
+        run: |
+
+          echo "========================================"
+          echo "Validating Changed Metadata"
+          echo "========================================"
+
+          mapfile -t FILES <<< "$CHANGED_FILES"
+
+          DEPLOY_ARGS=()
+
+          for FILE in "${FILES[@]}"; do
+            if [ -n "$FILE" ]; then
+              DEPLOY_ARGS+=(--source-dir "$FILE")
+            fi
+          done
+
           sf project deploy start \
             --target-org UAT \
-            --source-dir force-app \
+            "${DEPLOY_ARGS[@]}" \
+            --test-level RunLocalTests \
+            --dry-run \
+            --wait 60
+
+      # 7. Deploy the changed metadata only
+      - name: Deploy Changed Metadata
+        if: steps.changed.outputs.has_changes == 'true'
+        shell: bash
+        env:
+          CHANGED_FILES: ${{ steps.changed.outputs.files }}
+        run: |
+
+          echo "========================================"
+          echo "Deploying Changed Metadata"
+          echo "========================================"
+
+          mapfile -t FILES <<< "$CHANGED_FILES"
+
+          DEPLOY_ARGS=()
+
+          for FILE in "${FILES[@]}"; do
+            if [ -n "$FILE" ]; then
+              DEPLOY_ARGS+=(--source-dir "$FILE")
+            fi
+          done
+
+          sf project deploy start \
+            --target-org UAT \
+            "${DEPLOY_ARGS[@]}" \
             --wait 60
